@@ -1,18 +1,14 @@
+import { next } from "@vercel/functions";
+
+
 export default function middleware(request) {
 
     const password =
         process.env.SITE_PASSWORD;
 
-    /*
-        Leave the site open until SITE_PASSWORD is added
-        in Vercel Project Settings.
-
-        This lets the deployment continue working while
-        the password is being configured.
-    */
 
     if (!password) {
-        return;
+        return next();
     }
 
 
@@ -121,7 +117,7 @@ export default function middleware(request) {
     }
 
 
-    return;
+    return next();
 }
 
 
