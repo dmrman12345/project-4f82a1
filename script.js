@@ -1689,6 +1689,13 @@ async function fetchManifest(
     signal
 ) {
 
+    /*
+        First check the browser's manifest cache.
+
+        Cached videos do not contact the cache-creation
+        endpoint again.
+    */
+
     if (
         manifestMemoryCache.has(
             videoId
@@ -1701,6 +1708,102 @@ async function fetchManifest(
 
     }
 
+
+    /*
+        Try the actual cached manifest first.
+
+        This is important because the backend already knows
+        how to serve cached files efficiently from GitHub RAW.
+    */
+
+    try {
+
+        const data =
+            await fetchCacheFile(
+                videoId,
+                "manifest.json",
+                signal
+            );
+
+
+        const text =
+            new TextDecoder()
+                .decode(
+                    data
+                );
+
+
+        const manifest =
+            JSON.parse(
+                text
+            );
+
+
+        manifestMemoryCache.set(
+            videoId,
+            manifest
+        );
+
+
+        return manifest;
+
+    } catch (error) {
+
+        /*
+            Only a 404 means the video is not cached yet.
+
+            Network errors, aborts, 5xx errors, etc. should
+            not trigger an expensive YouTube cache build.
+        */
+
+        if (
+            error.name ===
+            "AbortError"
+        ) {
+
+            throw error;
+
+        }
+
+
+        if (
+            !String(
+                error.message
+            ).includes(
+                "HTTP 404"
+            )
+        ) {
+
+            throw error;
+
+        }
+
+    }
+
+
+    /*
+        Cache miss.
+
+        The backend endpoint is safe to call here because
+        cache-youtube.py checks GitHub for an existing
+        manifest itself before doing any yt-dlp/FFmpeg work.
+
+        Therefore:
+        - already cached video -> backend immediately returns
+          { cached: true }
+        - uncached video -> backend creates the cache once
+    */
+
+    await createVideoCache(
+        videoId,
+        signal
+    );
+
+
+    /*
+        The backend has finished creating the cache.
+        Fetch the newly-created manifest normally.
+    */
 
     const data =
         await fetchCacheFile(
@@ -1733,6 +1836,180 @@ async function fetchManifest(
 
 }
 
+
+/* ============================================================
+   CACHE CREATION
+============================================================ */
+
+async function createVideoCache(
+    videoId,
+    signal
+) {
+
+    const url =
+        BACKEND +
+        "/api/cache-youtube?id=" +
+        encodeURIComponent(
+            videoId
+        );
+
+
+    let lastError =
+        null;
+
+
+    /*
+        The cache endpoint can take a while because it may:
+        1. run yt-dlp
+        2. download the selected YouTube streams
+        3. run FFmpeg
+        4. upload the DASH segments to GitHub
+
+        Do not use a short frontend timeout here.
+    */
+
+    for (
+        let attempt = 0;
+        attempt < 2;
+        attempt++
+    ) {
+
+        try {
+
+            const response =
+                await fetch(
+                    url,
+                    {
+                        method:
+                            "GET",
+
+                        signal:
+                            signal,
+
+                        cache:
+                            "no-store"
+                    }
+                );
+
+
+            if (
+                !response.ok
+            ) {
+
+                let message =
+                    "HTTP " +
+                    response.status;
+
+
+                try {
+
+                    const data =
+                        await response.json();
+
+
+                    if (
+                        data &&
+                        data.message
+                    ) {
+
+                        message +=
+                            " - " +
+                            data.message;
+
+                    } else if (
+                        data &&
+                        data.error
+                    ) {
+
+                        message +=
+                            " - " +
+                            data.error;
+
+                    }
+
+                } catch (
+                    ignored
+                ) {
+                    // Keep the HTTP status.
+                }
+
+
+                throw new Error(
+                    "Cache creation failed: " +
+                    message
+                );
+
+            }
+
+
+            const data =
+                await response.json();
+
+
+            if (
+                !data ||
+                data.success !== true
+            ) {
+
+                throw new Error(
+                    (
+                        data &&
+                        (
+                            data.message ||
+                            data.error
+                        )
+                    ) ||
+                    "The backend could not create or find the video cache."
+                );
+
+            }
+
+
+            /*
+                The endpoint returns cached=true when the cache
+                already existed, and cached=false when it just
+                created it. Both are successful states.
+            */
+
+            return data;
+
+        } catch (error) {
+
+            lastError =
+                error;
+
+
+            if (
+                error.name ===
+                "AbortError"
+            ) {
+
+                throw error;
+
+            }
+
+
+            if (
+                attempt === 0
+            ) {
+
+                await delay(
+                    1000
+                );
+
+            }
+
+        }
+
+    }
+
+
+    throw lastError ||
+        new Error(
+            "Unable to create the video cache."
+        );
+
+}
 
 /* ============================================================
    CACHE FILE FETCHING
