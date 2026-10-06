@@ -4,36 +4,157 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>CodeTube GitHub Test</title>
+    <title>CodeTube Vercel Test</title>
 
-    <link rel="stylesheet" href="style.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #111;
+            color: white;
+            padding: 30px;
+        }
+
+        button {
+            padding: 12px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        #output {
+            margin-top: 20px;
+            background: #222;
+            padding: 20px;
+            white-space: pre-wrap;
+            border-radius: 8px;
+            max-width: 1000px;
+        }
+
+        .success {
+            color: #5cff75;
+        }
+
+        .error {
+            color: #ff5555;
+        }
+    </style>
 </head>
 
 <body>
 
-    <div class="container">
+    <h1>CodeTube Vercel Test</h1>
 
-        <h1>CodeTube GitHub Test</h1>
+    <p>
+        This page tests the connection between the Vercel frontend
+        and the CodeTube backend.
+    </p>
 
-        <p id="status">
-            Starting...
-        </p>
+    <button id="backendButton">
+        Test Backend
+    </button>
 
-        <div class="test-box">
-
-            <h2>GitHub API</h2>
-
-            <p id="githubStatus">
-                Waiting...
-            </p>
-
-            <pre id="fileOutput"></pre>
-
-        </div>
-
+    <div id="output">
+        Ready.
     </div>
 
-    <script src="script.js"></script>
+    <script>
+
+        const BACKEND =
+            "https://codetube-backend.vercel.app";
+
+
+        const output =
+            document.getElementById("output");
+
+
+        function log(message) {
+
+            output.textContent +=
+                "\n" + message;
+
+        }
+
+
+        document
+            .getElementById("backendButton")
+            .addEventListener("click", async function () {
+
+                output.textContent =
+                    "Testing CodeTube backend...\n";
+
+
+                const url =
+                    BACKEND +
+                    "/api/video?id=dQw4w9WgXcQ";
+
+
+                log("Request:");
+                log(url);
+                log("");
+
+
+                try {
+
+                    const response =
+                        await fetch(url);
+
+
+                    log(
+                        "HTTP status: " +
+                        response.status
+                    );
+
+
+                    log(
+                        "Response type: " +
+                        response.type
+                    );
+
+
+                    if (!response.ok) {
+
+                        throw new Error(
+                            "HTTP " +
+                            response.status
+                        );
+
+                    }
+
+
+                    const data =
+                        await response.json();
+
+
+                    log("");
+                    log("BACKEND RESPONSE:");
+                    log(
+                        JSON.stringify(
+                            data,
+                            null,
+                            2
+                        )
+                    );
+
+
+                    log("");
+                    log(
+                        "SUCCESS: Vercel frontend can reach the backend."
+                    );
+
+
+                } catch (error) {
+
+                    output.innerHTML +=
+                        "\n<span class='error'>" +
+                        "FAILED: " +
+                        error.message +
+                        "</span>";
+
+                }
+
+            });
+
+    </script>
 
 </body>
 </html>
