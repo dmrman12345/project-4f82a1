@@ -7,7 +7,7 @@
         content="width=device-width, initial-scale=1.0"
     >
 
-    <title>CodeTube</title>
+    <title>Video Watcher</title>
 
     <link
         rel="stylesheet"
@@ -21,7 +21,7 @@
          TOP NAVIGATION
     ========================================================== -->
 
-    <header class="topbar">
+    <header class="topbar" id="topbar">
 
         <button
             id="menuButton"
@@ -34,10 +34,10 @@
         <button
             id="homeLogo"
             class="logo-button"
-            aria-label="CodeTube home"
+            aria-label="Video Watcher home"
         >
             <span class="logo-icon">▶</span>
-            <span class="logo-text">CodeTube</span>
+            <span class="logo-text">Video Watcher</span>
         </button>
 
         <div class="search-container">
@@ -45,7 +45,7 @@
             <input
                 id="searchInput"
                 type="search"
-                placeholder="Search"
+                placeholder="Search videos"
                 autocomplete="off"
             >
 
@@ -169,6 +169,46 @@
     <!-- =========================================================
          MAIN APPLICATION
     ========================================================== -->
+
+    <!-- =========================================================
+         PASSWORD GATE
+    ========================================================== -->
+
+    <section
+        id="passwordGate"
+        class="password-gate"
+        aria-label="Password required"
+    >
+        <div class="password-card">
+            <div class="password-icon">▶</div>
+            <h1>Video Watcher</h1>
+            <p>Enter the password to continue.</p>
+
+            <form id="passwordForm">
+                <input
+                    id="passwordInput"
+                    type="password"
+                    placeholder="Password"
+                    autocomplete="current-password"
+                    required
+                >
+
+                <button
+                    id="passwordSubmit"
+                    type="submit"
+                >
+                    Enter
+                </button>
+            </form>
+
+            <p
+                id="passwordError"
+                class="password-error"
+                aria-live="polite"
+            ></p>
+        </div>
+    </section>
+
 
     <main id="mainContent">
 
