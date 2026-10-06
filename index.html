@@ -4,34 +4,60 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>CodeTube Vercel Test</title>
+    <title>CodeTube MSE Backend Test</title>
 
     <style>
         body {
-            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 24px;
             background: #111;
             color: white;
-            padding: 30px;
+            font-family: Arial, sans-serif;
+        }
+
+        h1 {
+            margin-top: 0;
         }
 
         button {
             padding: 12px 20px;
-            font-size: 16px;
+            margin-right: 8px;
+            border: none;
+            border-radius: 6px;
             cursor: pointer;
-            margin: 5px;
+            font-size: 16px;
         }
 
-        #output {
+        #startButton {
+            background: #ff0033;
+            color: white;
+        }
+
+        #clearButton {
+            background: #333;
+            color: white;
+        }
+
+        video {
+            display: block;
+            width: min(100%, 960px);
             margin-top: 20px;
-            background: #222;
-            padding: 20px;
-            white-space: pre-wrap;
+            background: black;
+        }
+
+        #status {
+            margin-top: 20px;
+            padding: 16px;
+            background: #1d1d1d;
             border-radius: 8px;
-            max-width: 1000px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            max-height: 500px;
+            overflow-y: auto;
         }
 
         .success {
-            color: #5cff75;
+            color: #55ff77;
         }
 
         .error {
@@ -42,117 +68,603 @@
 
 <body>
 
-    <h1>CodeTube Vercel Test</h1>
+    <h1>CodeTube MSE Backend Test</h1>
 
-    <p>
-        This page tests the connection between the Vercel frontend
-        and the CodeTube backend.
-    </p>
-
-    <button id="backendButton">
-        Test Backend
+    <button id="startButton">
+        Start Video Test
     </button>
 
-    <div id="output">
-        Ready.
-    </div>
+    <button id="clearButton">
+        Clear Log
+    </button>
+
+    <video
+        id="player"
+        controls
+        playsinline>
+    </video>
+
+    <div id="status">Ready.</div>
 
     <script>
 
         const BACKEND =
             "https://codetube-backend.vercel.app";
 
+        const VIDEO_ID =
+            "dQw4w9WgXcQ";
 
-        const output =
-            document.getElementById("output");
+        const player =
+            document.getElementById("player");
+
+        const status =
+            document.getElementById("status");
+
+
+        let mediaSource = null;
+        let videoSourceBuffer = null;
+        let audioSourceBuffer = null;
 
 
         function log(message) {
 
-            output.textContent +=
+            status.textContent +=
                 "\n" + message;
+
+            status.scrollTop =
+                status.scrollHeight;
 
         }
 
 
-        document
-            .getElementById("backendButton")
-            .addEventListener("click", async function () {
+        function clearLog() {
 
-                output.textContent =
-                    "Testing CodeTube backend...\n";
+            status.textContent =
+                "Ready.";
 
-
-                const url =
-                    BACKEND +
-                    "/api/video?id=dQw4w9WgXcQ";
+        }
 
 
-                log("Request:");
-                log(url);
-                log("");
+        async function getFile(filename) {
+
+            const url =
+                BACKEND +
+                "/api/cache-file?id=" +
+                encodeURIComponent(VIDEO_ID) +
+                "&file=" +
+                encodeURIComponent(filename);
 
 
-                try {
-
-                    const response =
-                        await fetch(url);
-
-
-                    log(
-                        "HTTP status: " +
-                        response.status
-                    );
+            log(
+                "Downloading: " +
+                filename
+            );
 
 
-                    log(
-                        "Response type: " +
-                        response.type
-                    );
+            const response =
+                await fetch(url);
 
 
-                    if (!response.ok) {
+            if (!response.ok) {
 
-                        throw new Error(
-                            "HTTP " +
-                            response.status
+                throw new Error(
+                    "HTTP " +
+                    response.status +
+                    " for " +
+                    filename
+                );
+
+            }
+
+
+            const data =
+                await response.arrayBuffer();
+
+
+            log(
+                "Downloaded " +
+                filename +
+                " (" +
+                data.byteLength +
+                " bytes)"
+            );
+
+
+            return data;
+
+        }
+
+
+        async function getManifest() {
+
+            const url =
+                BACKEND +
+                "/api/cache-file?id=" +
+                encodeURIComponent(VIDEO_ID) +
+                "&file=manifest.json";
+
+
+            log(
+                "Loading manifest..."
+            );
+
+
+            const response =
+                await fetch(url);
+
+
+            if (!response.ok) {
+
+                throw new Error(
+                    "Manifest HTTP " +
+                    response.status
+                );
+
+            }
+
+
+            const manifest =
+                await response.json();
+
+
+            log(
+                "Manifest loaded."
+            );
+
+
+            log(
+                "Title: " +
+                manifest.title
+            );
+
+
+            log(
+                "Resolution: " +
+                manifest.width +
+                "x" +
+                manifest.height
+            );
+
+
+            log(
+                "Video segments: " +
+                manifest.videoSegments.length
+            );
+
+
+            log(
+                "Audio segments: " +
+                manifest.audioSegments.length
+            );
+
+
+            return manifest;
+
+        }
+
+
+        function appendBuffer(
+            sourceBuffer,
+            data
+        ) {
+
+            return new Promise(
+                function(resolve, reject) {
+
+                    function done() {
+
+                        sourceBuffer
+                            .removeEventListener(
+                                "updateend",
+                                done
+                            );
+
+                        sourceBuffer
+                            .removeEventListener(
+                                "error",
+                                failed
+                            );
+
+                        resolve();
+
+                    }
+
+
+                    function failed(event) {
+
+                        sourceBuffer
+                            .removeEventListener(
+                                "updateend",
+                                done
+                            );
+
+                        sourceBuffer
+                            .removeEventListener(
+                                "error",
+                                failed
+                            );
+
+                        reject(
+                            event
                         );
 
                     }
 
 
+                    sourceBuffer
+                        .addEventListener(
+                            "updateend",
+                            done
+                        );
+
+                    sourceBuffer
+                        .addEventListener(
+                            "error",
+                            failed
+                        );
+
+
+                    sourceBuffer.appendBuffer(
+                        data
+                    );
+
+                }
+            );
+
+        }
+
+
+        async function startTest() {
+
+            clearLog();
+
+            log(
+                "Starting CodeTube MSE test..."
+            );
+
+
+            if (!window.MediaSource) {
+
+                throw new Error(
+                    "MediaSource is not supported."
+                );
+
+            }
+
+
+            const manifest =
+                await getManifest();
+
+
+            const videoMime =
+                'video/mp4; codecs="' +
+                manifest.videoCodec +
+                '"';
+
+
+            const audioMime =
+                'audio/mp4; codecs="' +
+                manifest.audioCodec +
+                '"';
+
+
+            log(
+                "Video MIME: " +
+                videoMime
+            );
+
+
+            log(
+                "Audio MIME: " +
+                audioMime
+            );
+
+
+            if (
+                !MediaSource.isTypeSupported(
+                    videoMime
+                )
+            ) {
+
+                throw new Error(
+                    "Video MIME is not supported."
+                );
+
+            }
+
+
+            if (
+                !MediaSource.isTypeSupported(
+                    audioMime
+                )
+            ) {
+
+                throw new Error(
+                    "Audio MIME is not supported."
+                );
+
+            }
+
+
+            log(
+                "MIME support confirmed."
+            );
+
+
+            mediaSource =
+                new MediaSource();
+
+
+            player.src =
+                URL.createObjectURL(
+                    mediaSource
+                );
+
+
+            await new Promise(
+                function(resolve, reject) {
+
+                    mediaSource.addEventListener(
+                        "sourceopen",
+                        resolve,
+                        {
+                            once: true
+                        }
+                    );
+
+                    mediaSource.addEventListener(
+                        "error",
+                        reject,
+                        {
+                            once: true
+                        }
+                    );
+
+                }
+            );
+
+
+            log(
+                "MediaSource opened."
+            );
+
+
+            videoSourceBuffer =
+                mediaSource.addSourceBuffer(
+                    videoMime
+                );
+
+
+            audioSourceBuffer =
+                mediaSource.addSourceBuffer(
+                    audioMime
+                );
+
+
+            log(
+                "Video SourceBuffer created."
+            );
+
+
+            log(
+                "Audio SourceBuffer created."
+            );
+
+
+            const videoInit =
+                await getFile(
+                    manifest.videoInit.filename
+                );
+
+
+            const audioInit =
+                await getFile(
+                    manifest.audioInit.filename
+                );
+
+
+            await appendBuffer(
+                videoSourceBuffer,
+                videoInit
+            );
+
+
+            log(
+                "Video init appended."
+            );
+
+
+            await appendBuffer(
+                audioSourceBuffer,
+                audioInit
+            );
+
+
+            log(
+                "Audio init appended."
+            );
+
+
+            log(
+                "Starting progressive download..."
+            );
+
+
+            let playbackStarted =
+                false;
+
+
+            const startPlayback =
+                async function() {
+
+                    if (playbackStarted) {
+                        return;
+                    }
+
+
+                    try {
+
+                        await player.play();
+
+                        playbackStarted =
+                            true;
+
+                        log(
+                            "PLAYBACK STARTED."
+                        );
+
+                    } catch (error) {
+
+                        log(
+                            "Autoplay blocked. Press play."
+                        );
+
+                    }
+
+                };
+
+
+            for (
+                let i = 0;
+                i < Math.max(
+                    manifest.videoSegments.length,
+                    manifest.audioSegments.length
+                );
+                i++
+            ) {
+
+                if (
+                    i <
+                    manifest.videoSegments.length
+                ) {
+
+                    const segment =
+                        manifest.videoSegments[i];
+
+
                     const data =
-                        await response.json();
+                        await getFile(
+                            segment.filename
+                        );
 
 
-                    log("");
-                    log("BACKEND RESPONSE:");
-                    log(
-                        JSON.stringify(
-                            data,
-                            null,
-                            2
-                        )
+                    await appendBuffer(
+                        videoSourceBuffer,
+                        data
                     );
 
 
-                    log("");
                     log(
-                        "SUCCESS: Vercel frontend can reach the backend."
+                        "Video chunk " +
+                        segment.index +
+                        " appended."
                     );
-
-
-                } catch (error) {
-
-                    output.innerHTML +=
-                        "\n<span class='error'>" +
-                        "FAILED: " +
-                        error.message +
-                        "</span>";
 
                 }
 
-            });
+
+                if (
+                    i <
+                    manifest.audioSegments.length
+                ) {
+
+                    const segment =
+                        manifest.audioSegments[i];
+
+
+                    const data =
+                        await getFile(
+                            segment.filename
+                        );
+
+
+                    await appendBuffer(
+                        audioSourceBuffer,
+                        data
+                    );
+
+
+                    log(
+                        "Audio chunk " +
+                        segment.index +
+                        " appended."
+                    );
+
+                }
+
+
+                if (
+                    !playbackStarted &&
+                    player.buffered.length > 0 &&
+                    player.buffered.end(0) > 4
+                ) {
+
+                    await startPlayback();
+
+                }
+
+            }
+
+
+            if (
+                mediaSource.readyState ===
+                "open"
+            ) {
+
+                mediaSource.endOfStream();
+
+            }
+
+
+            log(
+                "All cached segments loaded."
+            );
+
+
+            log(
+                "🎉 CODETUBE MSE TEST COMPLETE"
+            );
+
+        }
+
+
+        document
+            .getElementById("startButton")
+            .addEventListener(
+                "click",
+                async function() {
+
+                    try {
+
+                        await startTest();
+
+                    } catch (error) {
+
+                        log(
+                            "💥 TEST FAILED"
+                        );
+
+                        log(
+                            error.message ||
+                            String(error)
+                        );
+
+                        console.error(
+                            error
+                        );
+
+                    }
+
+                }
+            );
+
+
+        document
+            .getElementById("clearButton")
+            .addEventListener(
+                "click",
+                clearLog
+            );
 
     </script>
 
